@@ -1,7 +1,10 @@
 #include <windows.h>
+#include <time.h>
 
 HMODULE origLibrary;
 WNDPROC wndProc;
+time_t lastGuiCtrlTab = 0;
+bool wsadActive = false;
 
 typedef void (*_PushLetter) (int Letter);
 _PushLetter PushLetter;
@@ -15,41 +18,42 @@ LRESULT CALLBACK HookedMessageDispatcher(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 		return CallWindowProc(wndProc, hWnd, uMsg, wParam, lParam);
 	}
 
-	switch (uMsg) {
-		case WM_KEYDOWN:
-		{
-			switch (wParam) {
-				case 0x57:
-				{
-					wParam = VK_UP;
-					break;
-				}
-				case 0x53:
-				{
-					wParam = VK_DOWN;
-					break;
-				}
-				case 0x41:
-				{
-					wParam = VK_LEFT;
-					break;
-				}
-				case 0x44:
-				{
-					wParam = VK_RIGHT;
-					break;
-				}
-			}
-
-			return CallWindowProc(wndProc, hWnd, uMsg, wParam, lParam);
+	if (uMsg == WM_KEYDOWN && wParam == VK_TAB && GetKeyState(VK_CONTROL) & 0x80) {
+		if (lastGuiCtrlTab + 300 < clock()) {
+			wsadActive = !wsadActive;
 		}
-		default:
-		{
-			return CallWindowProc(wndProc, hWnd, uMsg, wParam, lParam);
+
+		lastGuiCtrlTab = clock();
+
+		return CallWindowProc(wndProc, hWnd, uMsg, wParam, lParam);
+	}
+
+	if (uMsg == WM_KEYDOWN && wsadActive) {
+		switch (wParam) {
+			case 0x57:
+			{
+				wParam = VK_UP;
+				break;
+			}
+			case 0x53:
+			{
+				wParam = VK_DOWN;
+				break;
+			}
+			case 0x41:
+			{
+				wParam = VK_LEFT;
+				break;
+			}
+			case 0x44:
+			{
+				wParam = VK_RIGHT;
+				break;
+			}
 		}
 	}
 
-	return DefWindowProc(hWnd, uMsg, wParam, lParam);
+	return CallWindowProc(wndProc, hWnd, uMsg, wParam, lParam);
 }
 
 HWND WINAPI HookedCreateWindowEx(DWORD dwExStyle, LPCTSTR lpClassName, LPCTSTR lpWindowName, DWORD dwStyle, int x, int y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam) {
@@ -61,7 +65,7 @@ HWND WINAPI HookedCreateWindowEx(DWORD dwExStyle, LPCTSTR lpClassName, LPCTSTR l
 }
 
 /*_cdecl */void _stdcall HookedPushLetter(int Letter) {
-	if (!isOnline()) {
+	if (!isOnline() || !wsadActive) {
 		PushLetter(Letter);
 		return;
 	}
